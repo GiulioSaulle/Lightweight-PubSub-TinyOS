@@ -64,6 +64,49 @@ time2 = 0*t.ticksPerSecond();
 node2.bootAtTime(time2);
 print ">>>Will boot at time", time2/t.ticksPerSecond(), "[sec]";
 
+print "Creating node 3...";
+node3 = t.getNode(3);
+time3 = 0*t.ticksPerSecond();
+node3.bootAtTime(time3);
+print ">>>Will boot at time", time3/t.ticksPerSecond(), "[sec]";
+
+print "Creating node 4...";
+node4 = t.getNode(4);
+time4 = 0*t.ticksPerSecond();
+node4.bootAtTime(time4);
+print ">>>Will boot at time", time4/t.ticksPerSecond(), "[sec]";
+
+print "Creating node 5...";
+node5 = t.getNode(5);
+time5 = 0*t.ticksPerSecond();
+node5.bootAtTime(time5);
+print ">>>Will boot at time", time5/t.ticksPerSecond(), "[sec]";
+
+print "Creating node 6...";
+node6 = t.getNode(6);
+time6 = 0*t.ticksPerSecond();
+node6.bootAtTime(time6);
+print ">>>Will boot at time", time6/t.ticksPerSecond(), "[sec]";
+
+print "Creating node 7...";
+node7 = t.getNode(7);
+time7 = 0*t.ticksPerSecond();
+node7.bootAtTime(time7);
+print ">>>Will boot at time", time7/t.ticksPerSecond(), "[sec]";
+
+print "Creating node 8...";
+node8 = t.getNode(8);
+time8 = 0*t.ticksPerSecond();
+node8.bootAtTime(time8);
+print ">>>Will boot at time", time8/t.ticksPerSecond(), "[sec]";
+
+print "Creating node 9...";
+node9 = t.getNode(9);
+time9 = 0*t.ticksPerSecond();
+node9.bootAtTime(time9);
+print ">>>Will boot at time", time9/t.ticksPerSecond(), "[sec]";
+
+
 print "Creating radio channels..."
 f = open(topofile, "r");
 lines = f.readlines()
@@ -93,11 +136,11 @@ for line in lines:
             mid_compl = 0;
             sys.stdout.write ("#")
             sys.stdout.flush()
-        for i in range(1, 8):
+        for i in range(1, 10):
             t.getNode(i).addNoiseTraceReading(val)
 print "Done!";
 
-for i in range(1, 8):
+for i in range(1, 10):
     print ">>>Creating noise model for node:",i;
     t.getNode(i).createNoiseModel()
 
