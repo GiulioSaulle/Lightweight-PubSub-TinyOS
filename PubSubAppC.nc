@@ -1,12 +1,12 @@
 
  
-#include "RadioRoute.h"
+#include "PubSub.h"
 
 
-configuration RadioRouteAppC {}
+configuration PubSubAppC {}
 implementation {
 /****** COMPONENTS *****/
-  components MainC, RadioRouteC as App;
+  components MainC, PubSubC as App;
   //add the other components here
   components new AMSenderC(AM_RADIO_COUNT_MSG);
   components new AMReceiverC(AM_RADIO_COUNT_MSG);

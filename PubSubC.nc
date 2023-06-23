@@ -1,11 +1,11 @@
 #include "Timer.h"
 
-#include "RadioRoute.h"
+#include "PubSub.h"
 
 #include <stdlib.h>
 #include <time.h>
 
-module RadioRouteC @safe() {
+module PubSubC @safe() {
   uses {
 
     /****** INTERFACES *****/
@@ -34,39 +34,28 @@ implementation {
   // Radio Busy Flag
   bool locked;
 
-  // Maximum number of connected clients
-  #define MAX_CLIENTS 8
-
-  // Maximum number of topics
-  #define MAX_TOPICS 3
-
-  // Timeout for the CONNECT message
-  #define CONNECT_TIMEOUT 5000
-
-  // Minimum and maximum delay for the random delay
-  #define MIN_DELAY 100
-  #define MAX_DELAY 500
-
-
   typedef struct {
     uint16_t nodeID; // ID of the client node
     bool isConnected; // Connection status of the client
     bool isSubscribed[MAX_TOPICS]; // Subscription status for each topic
   }
-  ClientInfo;
+  NodeInfo;
 
   typedef struct {
-    ClientInfo clients[MAX_CLIENTS]; // Array of connected clients
+    NodeInfo clients[MAX_CLIENTS]; // Array of connected clients
   }
-  PANCoordinator;
+  CommunicationNetwork;
+
+  CommunicationNetwork networkTable;
 
   bool actual_send(uint16_t address, message_t * packet);
   bool generate_send(uint16_t address, message_t * packet, uint8_t type);
 
-  void initializePANCoordinator(PANCoordinator * coordinator);
-  bool isConnected(const PANCoordinator * coordinator, uint16_t nodeID);
-  bool isSubscribed(const PANCoordinator * coordinator, uint16_t nodeID, uint8_t topic);
-  void subscribe(PANCoordinator * coordinator, uint16_t nodeID, uint8_t topic);
+  void initializeCommunicationNetwork(CommunicationNetwork * network);
+  bool isConnected( CommunicationNetwork * network, uint16_t nodeID);
+  bool addConnection( CommunicationNetwork * network, uint16_t nodeID);
+  bool isSubscribed( CommunicationNetwork * network, uint16_t nodeID, uint8_t topic);
+  void subscribe(CommunicationNetwork * network, uint16_t nodeID, uint8_t topic);
 
   uint16_t generateRandomDelay(uint16_t minDelay, uint16_t maxDelay);
 
@@ -105,7 +94,7 @@ implementation {
      * Implement here the logic to perform the actual send of the packet using the tinyOS interfaces
      */
 
-    radio_route_msg_t * payload = (radio_route_msg_t*)call Packet.getPayload(packet, sizeof(radio_route_msg_t));
+    pubsub_message_t * payload = (pubsub_message_t*)call Packet.getPayload(packet, sizeof(pubsub_message_t));
 
     if (locked){
       dbgerror("radio_send", "Radio is locked\n");
@@ -114,14 +103,24 @@ implementation {
 
     switch(payload->messageType){
 
-      case 0:
-        //CONNECT
-        if (call AMSend.send(address, packet, sizeof(radio_route_msg_t)) == SUCCESS) {
+      case CONNECT:
+        if (call AMSend.send(address, packet, sizeof(pubsub_message_t)) == SUCCESS) {
           locked = TRUE;
           dbg("radio_send", "Node %hu Sent a CONNECT message to PANC\n", TOS_NODE_ID);
           return TRUE;
         } else {
           dbgerror("radio_send", "Node %hu Failed to send a CONNECT message to PANC\n", TOS_NODE_ID);
+          return FALSE;
+        }
+        break;
+
+      case CONNECT_ACK:
+        if (call AMSend.send(address, packet, sizeof(pubsub_message_t)) == SUCCESS) {
+          locked = TRUE;
+          dbg("radio_send", "Node %hu Sent a CONNECT_ACK message to Node %hu\n", TOS_NODE_ID, address);
+          return TRUE;
+        } else {
+          dbgerror("radio_send", "Node %hu Failed to send a CONNECT_ACK message to Node %hu\n", TOS_NODE_ID, address);
           return FALSE;
         }
         break;
@@ -145,7 +144,14 @@ implementation {
     if (err == SUCCESS) {
       dbg("radio", "Radio started.\n");
       // Start the timer after the radio has started up successfully
-      call Timer1.startOneShot(CONNECT_TIMEOUT);
+      // start the timer if not PANC
+      if (TOS_NODE_ID != 1){
+        call Timer1.startPeriodic(CONNECT_TIMEOUT);
+      }
+      else{
+        // Initialize the CommunicationNetwork
+        initializeCommunicationNetwork(&networkTable);
+      }
     } else {
       // Radio startup failed
       dbg("radio", "Radio failed to start. Trying Againg...\n");
@@ -165,8 +171,8 @@ implementation {
      */
 
     dbg("timer", "Timer1 fired.\n");
-    if (TOS_NODE_ID != 1) {
-      radio_route_msg_t * payload = (radio_route_msg_t * ) call Packet.getPayload( &packet, sizeof(radio_route_msg_t));
+    if (TOS_NODE_ID != 1){
+      pubsub_message_t * payload = (pubsub_message_t * ) call Packet.getPayload( &packet, sizeof(pubsub_message_t));
       if (payload == NULL) {
         // Failed to obtain payload pointer
         dbgerror("radio_pack", "Failed to obtain payload\n");
@@ -193,8 +199,70 @@ implementation {
      * Perform the packet send using the generate_send function if needed
      */
 
-    dbg("radio_rec", "Received packet at time %s\n", sim_time_string());
-     
+    if (len != sizeof(pubsub_message_t)) {
+      return bufPtr;
+    } else {
+      pubsub_message_t* receivedMsg = (pubsub_message_t*)payload;
+      dbg("radio_rec", "Received packet at time %s\n", sim_time_string());
+
+      switch(receivedMsg->messageType){
+
+        case CONNECT:
+        dbg("radio_rec", "Received a CONNECT message from node %hu\n", receivedMsg->nodeID);
+        if (TOS_NODE_ID == 1) {
+          // If the node is the PAN Coordinator, send a CONNECT_ACK message
+          pubsub_message_t * payload = (pubsub_message_t * ) call Packet.getPayload( &packet, sizeof(pubsub_message_t));
+          if (payload == NULL) {
+            // Failed to obtain payload pointer
+            dbgerror("radio_pack", "Failed to obtain payload\n");
+          } else {
+            uint16_t address = receivedMsg->nodeID;
+
+            // check if node is connected
+            if (isConnected(&networkTable, address)){
+              dbg("radio_rec", "Node %hu is already connected to PANC\n", address);
+            }
+            else{
+              // add node to the list of connected nodes
+              if(addConnection(&networkTable, address)){
+                dbg("radio_rec", "Node %hu added to the list of connected nodes\n", address);
+              }
+            }
+
+            payload -> messageType = CONNECT_ACK;
+            payload -> nodeID = TOS_NODE_ID;
+
+            // Generate and schedule the message transmission
+            if (!generate_send(address, &packet, payload -> messageType)) {
+              // Failed to schedule the message transmission, handle the error
+              dbgerror("radio_send", "Failed to schedule message transmission\n");
+            } else {
+              dbg("radio_send", "Node %hu Scheduled a CONNECT_ACK message to node %hu\n", TOS_NODE_ID, receivedMsg->nodeID);
+            }
+          }
+        }
+        break;
+
+        case CONNECT_ACK:
+        dbg("radio_rec", "Received a CONNECT_ACK message from node %hu\n", receivedMsg->nodeID);
+        if (TOS_NODE_ID != 1 && call Timer1.isRunning()) {
+          call Timer1.stop();
+          dbg("timer", "Timer1 stopped.\n");
+        }
+        break;
+
+
+
+        default:
+        dbgerror("radio_rec", "Received an invalid message type\n");
+        break;
+
+
+      }
+
+      return bufPtr;
+
+      }
     }
 
   event void AMSend.sendDone(message_t * bufPtr, error_t error) {
@@ -216,51 +284,63 @@ implementation {
     }
   }
 
-  void initializePANCoordinator(PANCoordinator * coordinator) {
+  void initializeCommunicationNetwork(CommunicationNetwork * network) {
     // Iterate over the clients array and initialize each client
     int i, j;
     for (i = 0; i < MAX_CLIENTS; i++) {
-      coordinator -> clients[i].nodeID = 0; // Initialize node ID to 0
-      coordinator -> clients[i].isConnected = FALSE; // Set isConnected to false
+      network -> clients[i].nodeID = i + 2; // Set the nodeID
+      network -> clients[i].isConnected = FALSE; // Set isConnected to false
       for (j = 0; j < MAX_TOPICS; j++) {
-        coordinator -> clients[i].isSubscribed[j] = FALSE; // Set all subscriptions to false
+        network -> clients[i].isSubscribed[j] = FALSE; // Set all subscriptions to false
       }
     }
   }
 
-  bool isConnected(const PANCoordinator * coordinator, uint16_t nodeID) {
+  bool isConnected(CommunicationNetwork * network, uint16_t nodeID) {
     // Iterate over the clients array to find the node
     int i;
     for (i = 0; i < MAX_CLIENTS; i++) {
-      if (coordinator -> clients[i].nodeID == nodeID && coordinator -> clients[i].isConnected) {
-        // Node found and is connected
+      if (network -> clients[i].nodeID == nodeID) {
+        // Check if the node is connected
+        return network -> clients[i].isConnected;
+      }
+    }
+    return FALSE;
+  }
+
+  bool addConnection(CommunicationNetwork * network, uint16_t nodeID){
+    // Iterate over the clients array to find the node and set isConnected to true
+    int i;
+    for (i = 0; i < MAX_CLIENTS; i++) {
+      if (network -> clients[i].nodeID == nodeID) {
+        // Check if the node is connected
+        network -> clients[i].isConnected = TRUE;
         return TRUE;
       }
     }
-    // Node not found or not connected
     return FALSE;
   }
 
-  bool isSubscribed(const PANCoordinator * coordinator, uint16_t nodeID, uint8_t topic) {
+  bool isSubscribed(CommunicationNetwork * network, uint16_t nodeID, uint8_t topic) {
     // Iterate over the clients array to find the node
     int i;
     for (i = 0; i < MAX_CLIENTS; i++) {
-      if (coordinator -> clients[i].nodeID == nodeID && coordinator -> clients[i].isConnected) {
+      if (network -> clients[i].nodeID == nodeID && network -> clients[i].isConnected) {
         // Check if the node is subscribed to the topic
-        return coordinator -> clients[i].isSubscribed[topic];
+        return network -> clients[i].isSubscribed[topic];
       }
     }
     // Node not found or not connected
     return FALSE;
   }
 
-  void subscribe(PANCoordinator * coordinator, uint16_t nodeID, uint8_t topic) {
+  void subscribe(CommunicationNetwork * network, uint16_t nodeID, uint8_t topic) {
     // Iterate over the clients array to find the node
     int i;
     for (i = 0; i < MAX_CLIENTS; i++) {
-      if (coordinator -> clients[i].nodeID == nodeID && coordinator -> clients[i].isConnected) {
+      if (network -> clients[i].nodeID == nodeID && network -> clients[i].isConnected) {
         // Subscribe the node to the topic
-        coordinator -> clients[i].isSubscribed[topic] = TRUE;
+        network -> clients[i].isSubscribed[topic] = TRUE;
         break;
       }
     }
