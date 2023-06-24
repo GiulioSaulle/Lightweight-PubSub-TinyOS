@@ -30,6 +30,13 @@ implementation {
   // Variables to store the message to send
   message_t queued_packet;
   uint16_t queue_addr;
+
+  #define MAX_QUEUE_SIZE 100  // Maximum size of the message queue
+
+  message_t messageQueue[MAX_QUEUE_SIZE];  // Message queue
+  uint16_t addressQueue[MAX_QUEUE_SIZE];   // Address queue
+  uint16_t queueSize = 0;  
+
   
   // Radio Busy Flag
   bool locked;
@@ -70,13 +77,26 @@ implementation {
      *		type: payload message type
      *
      */
+    if (queueSize >= MAX_QUEUE_SIZE) {
+    dbgerror("radio_send", "Message queue is full\n");
+    return FALSE;
+    }
+
+    // Add the message to the queue
+    messageQueue[queueSize] = *packet;
+    addressQueue[queueSize] = address;
+    queueSize++;
+
+
     if (call Timer0.isRunning()) {
-      return FALSE;
+
+      // Timer is already running, the message will be sent later
+      dbg("radio_send", "Timer is already running, the message will be sent later\n");
+      
     } else {
 
+      // Timer is not running, start it
       call Timer0.startOneShot(generateRandomDelay(MIN_DELAY, MAX_DELAY));
-      queued_packet = * packet;
-      queue_addr = address;
     }
     return TRUE;
   }
@@ -86,7 +106,9 @@ implementation {
      * Timer triggered to perform the send.
      * MANDATORY: DO NOT MODIFY THIS FUNCTION
      */
-    actual_send(queue_addr, & queued_packet);
+    if (queueSize > 0) {
+       actual_send(addressQueue[0], & messageQueue[0]);
+    }
   }
 
   bool actual_send(uint16_t address, message_t * packet) {
@@ -140,12 +162,13 @@ implementation {
   }
 
   event void AMControl.startDone(error_t err) {
+    uint16_t i;
     /* Fill it ... */
     if (err == SUCCESS) {
       dbg("radio", "Radio started.\n");
       // Start the timer after the radio has started up successfully
       // start the timer if not PANC
-      if (TOS_NODE_ID != 1){
+      if (TOS_NODE_ID != 1 ){
         call Timer1.startPeriodic(CONNECT_TIMEOUT);
       }
       else{
@@ -269,6 +292,7 @@ implementation {
     /* This event is triggered when a message is sent 
      *  Check if the packet is sent 
      */
+     uint16_t i;
 
       if (error == SUCCESS) {
 
@@ -282,6 +306,24 @@ implementation {
     else{
       dbgerror("radio_send", "Send done error!\n");
     }
+
+    if (queueSize > 0) {
+
+    // Shift the queue to remove the sent message
+    for ( i = 0; i < queueSize - 1; i++) {
+      messageQueue[i] = messageQueue[i + 1];
+      addressQueue[i] = addressQueue[i + 1];
+    }
+
+    queueSize--;
+    
+    // send the next message in the queue
+
+    if (queueSize > 0) {
+      call Timer0.startOneShot(generateRandomDelay(MIN_DELAY, MAX_DELAY));
+    }
+  }
+
   }
 
   void initializeCommunicationNetwork(CommunicationNetwork * network) {
