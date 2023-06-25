@@ -48,6 +48,12 @@ print "Activate debug message on channel radio_rec"
 t.addChannel("radio_rec",out);
 print "Activate debug message on channel radio_pack"
 t.addChannel("radio_pack",out);
+print "Activate debug message on channel temp"
+t.addChannel("temp",out);
+print "Activate debug message on channel hum"
+t.addChannel("hum",out);
+print "Activate debug message on channel light"
+t.addChannel("light",out);
 
 
 
