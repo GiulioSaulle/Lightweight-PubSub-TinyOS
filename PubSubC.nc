@@ -25,6 +25,7 @@ module PubSubC @safe() {
     //interface for timers
     interface Timer < TMilli > as Timer0;
     interface Timer < TMilli > as Timer1;
+    interface Timer < TMilli > as Timer2;
     //other interfaces, if needed
   }
 }
@@ -33,9 +34,6 @@ implementation {
   message_t packet;
 
   // Variables to store the message to send
-  message_t queued_packet;
-  uint16_t queue_addr;
-
   message_t messageQueue[MAX_QUEUE_SIZE]; // Message queue
   uint16_t addressQueue[MAX_QUEUE_SIZE]; // Address queue
   uint16_t queueSize = 0;
@@ -43,6 +41,7 @@ implementation {
   // Radio Busy Flag
   bool locked;
 
+  // Table to store nodes information
   CommunicationNetwork networkTable;
 
   bool actual_send(uint16_t address, message_t * packet);
@@ -125,6 +124,50 @@ implementation {
       }
       break;
 
+    case SUBSCRIBE:
+      if (call AMSend.send(address, packet, sizeof(pubsub_message_t)) == SUCCESS) {
+        locked = TRUE;
+        dbg("radio_send", "Node %hu Sent a SUBSCRIBE message to Node %hu\n", TOS_NODE_ID, address);
+        return TRUE;
+      } else {
+        dbgerror("radio_send", "Node %hu Failed to send a SUBSCRIBE message to Node %hu\n", TOS_NODE_ID, address);
+        return FALSE;
+      }
+      break;
+
+    case SUBSCRIBE_ACK:
+      if (call AMSend.send(address, packet, sizeof(pubsub_message_t)) == SUCCESS) {
+        locked = TRUE;
+        dbg("radio_send", "Node %hu Sent a SUBSCRIBE_ACK message to Node %hu\n", TOS_NODE_ID, address);
+        return TRUE;
+      } else {
+        dbgerror("radio_send", "Node %hu Failed to send a SUBSCRIBE_ACK message to Node %hu\n", TOS_NODE_ID, address);
+        return FALSE;
+      }
+      break;
+
+    case PUBLISH:
+      if (call AMSend.send(address, packet, sizeof(pubsub_message_t)) == SUCCESS) {
+        locked = TRUE;
+        dbg("radio_send", "Node %hu Sent a PUBLISH message to PANC\n", TOS_NODE_ID);
+        return TRUE;
+      } else {
+        dbgerror("radio_send", "Node %hu Failed to send a PUBLISH message to PANC\n", TOS_NODE_ID);
+        return FALSE;
+      }
+      break;
+
+    case DATA:
+      if (call AMSend.send(address, packet, sizeof(pubsub_message_t)) == SUCCESS) {
+        locked = TRUE;
+        dbg("radio_send", "PANC Sent a DATA message to Node %hu\n", address);
+        return TRUE;
+      } else {
+        dbgerror("radio_send", "PANC Failed to send a DATA message to Node %hu\n", address);
+        return FALSE;
+      }
+      break;
+
     default:
       dbgerror("radio_send", "Trying to send an invalid message type\n");
       return FALSE;
@@ -146,7 +189,7 @@ implementation {
       // Start the timer after the radio has started up successfully
       // start the timer if not PANC
       if (TOS_NODE_ID != 1) {
-        call Timer1.startPeriodic(CONNECT_TIMEOUT);
+        call Timer1.startPeriodic(RETRANSMISSION_TIMEOUT);
       } else {
         // Initialize the CommunicationNetwork
         initializeCommunicationNetwork( & networkTable);
@@ -176,7 +219,7 @@ implementation {
         // Failed to obtain payload pointer
         dbgerror("radio_pack", "Failed to obtain payload\n");
       } else {
-        payload -> messageType = 0;
+        payload -> messageType = CONNECT;
         payload -> nodeID = TOS_NODE_ID;
 
         // Generate and schedule the message transmission
@@ -189,6 +232,35 @@ implementation {
       }
     }
 
+  }
+
+  event void Timer2.fired(){
+    /*
+     * Logic to trigger the Nodes to send SUBSCRIBE packets
+     */
+
+    dbg("timer", "Timer2 fired.\n");
+    if (TOS_NODE_ID != 1) {
+      pubsub_message_t * payload = (pubsub_message_t * ) call Packet.getPayload( & packet, sizeof(pubsub_message_t));
+      if (payload == NULL) {
+        // Failed to obtain payload pointer
+        dbgerror("radio_pack", "Failed to obtain payload\n");
+      } else {
+        payload -> messageType = SUBSCRIBE;
+        payload -> nodeID = TOS_NODE_ID;
+        payload -> topic.temperature = 1;
+        payload -> topic.humidity = 1;
+        payload -> topic.luminosity = 1;
+
+        // Generate and schedule the message transmission
+        if (!generate_send(1, & packet, payload -> messageType)) {
+          // Failed to schedule the message transmission, handle the error
+          dbgerror("radio_send", "Failed to schedule message transmission\n");
+        } else {
+          dbg("radio_send", "Node %hu Scheduled a SUBSCRIBE message to PANC\n", TOS_NODE_ID);
+        }
+      }
+    }
   }
 
   event message_t * Receive.receive(message_t * bufPtr, void * payload, uint8_t len) {
@@ -244,8 +316,60 @@ implementation {
       case CONNECT_ACK:
         dbg("radio_rec", "Received a CONNECT_ACK message from node %hu\n", receivedMsg -> nodeID);
         if (TOS_NODE_ID != 1 && call Timer1.isRunning()) {
-          call Timer1.stop();
-          dbg("timer", "Timer1 stopped.\n");
+
+          if (call Timer1.isRunning()) {
+            call Timer1.stop();
+            dbg("timer", "Timer1 stopped.\n");
+          }
+
+          call Timer2.startPeriodic(RETRANSMISSION_TIMEOUT);
+          dbg("timer", "Timer2 started.\n");
+        }
+        break;
+
+      case SUBSCRIBE:
+        dbg("radio_rec", "Received a SUBSCRIBE message from node %hu\n", receivedMsg -> nodeID);
+        if (TOS_NODE_ID == 1) {
+          // If the node is the PAN Coordinator, send a SUBSCRIBE_ACK message
+          pubsub_message_t * payload = (pubsub_message_t * ) call Packet.getPayload( & packet, sizeof(pubsub_message_t));
+          if (payload == NULL) {
+            // Failed to obtain payload pointer
+            dbgerror("radio_pack", "Failed to obtain payload\n");
+          } else {
+            uint16_t address = receivedMsg -> nodeID;
+
+            payload -> messageType = SUBSCRIBE_ACK;
+            payload -> nodeID = TOS_NODE_ID;
+
+            // check if node is connected
+            if (isConnected( & networkTable, address)) {
+
+           
+            
+
+            // Generate and schedule the message transmission
+            if (!generate_send(address, & packet, payload -> messageType)) {
+              // Failed to schedule the message transmission, handle the error
+              dbgerror("radio_send", "Failed to schedule message transmission\n");
+            } else {
+              dbg("radio_send", "Node %hu Scheduled a SUBSCRIBE_ACK message to node %hu\n", TOS_NODE_ID, receivedMsg -> nodeID);
+            }
+
+            }
+
+          }
+        }
+        break;
+
+      case SUBSCRIBE_ACK:
+        dbg("radio_rec", "Received a SUBSCRIBE_ACK message from node %hu\n", receivedMsg -> nodeID);
+        if (TOS_NODE_ID != 1) {
+          
+          if (call Timer2.isRunning()) {
+            call Timer2.stop();
+            dbg("timer", "Timer2 stopped.\n");
+          }
+
         }
         break;
 

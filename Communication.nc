@@ -15,7 +15,7 @@ CommunicationNetwork;
 
 void initializeCommunicationNetwork(CommunicationNetwork * network) {
   // Iterate over the clients array and initialize each client
-  int i, j;
+  uint8_t i, j;
   for (i = 0; i < MAX_CLIENTS; i++) {
     network -> clients[i].nodeID = i + 2; // Set the nodeID
     network -> clients[i].isConnected = FALSE; // Set isConnected to false
@@ -27,7 +27,7 @@ void initializeCommunicationNetwork(CommunicationNetwork * network) {
 
 bool isConnected(CommunicationNetwork * network, uint16_t nodeID) {
   // Iterate over the clients array to find the node
-  int i;
+  uint8_t i;
   for (i = 0; i < MAX_CLIENTS; i++) {
     if (network -> clients[i].nodeID == nodeID) {
       // Check if the node is connected
@@ -39,7 +39,7 @@ bool isConnected(CommunicationNetwork * network, uint16_t nodeID) {
 
 bool addConnection(CommunicationNetwork * network, uint16_t nodeID) {
   // Iterate over the clients array to find the node and set isConnected to true
-  int i;
+  uint8_t i;
   for (i = 0; i < MAX_CLIENTS; i++) {
     if (network -> clients[i].nodeID == nodeID) {
       // Check if the node is connected
@@ -52,7 +52,7 @@ bool addConnection(CommunicationNetwork * network, uint16_t nodeID) {
 
 bool isSubscribed(CommunicationNetwork * network, uint16_t nodeID, uint8_t topic) {
   // Iterate over the clients array to find the node
-  int i;
+  uint8_t i;
   for (i = 0; i < MAX_CLIENTS; i++) {
     if (network -> clients[i].nodeID == nodeID && network -> clients[i].isConnected) {
       // Check if the node is subscribed to the topic
@@ -65,7 +65,7 @@ bool isSubscribed(CommunicationNetwork * network, uint16_t nodeID, uint8_t topic
 
 void subscribe(CommunicationNetwork * network, uint16_t nodeID, uint8_t topic) {
   // Iterate over the clients array to find the node
-  int i;
+  uint8_t i;
   for (i = 0; i < MAX_CLIENTS; i++) {
     if (network -> clients[i].nodeID == nodeID && network -> clients[i].isConnected) {
       // Subscribe the node to the topic
