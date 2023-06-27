@@ -12,12 +12,12 @@ int16_t generateRandomTemperature() {
 }
 
 // Function to generate a random humidity reading
-uint8_t generateRandomHumidity() {
-  uint8_t minHumidity = 0; // Minimum humidity (0%)
-  uint8_t maxHumidity = 100; // Maximum humidity (100%)
+uint16_t generateRandomHumidity() {
+  uint16_t minHumidity = 0; // Minimum humidity (0%)
+  uint16_t maxHumidity = 100; // Maximum humidity (100%)
 
   // Generate a random humidity within the specified range
-  uint8_t humidity = minHumidity + rand() % (maxHumidity - minHumidity + 1);
+  uint16_t humidity = minHumidity + rand() % (maxHumidity - minHumidity + 1);
 
   return humidity;
 }

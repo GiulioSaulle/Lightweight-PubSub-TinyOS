@@ -26,6 +26,7 @@ module PubSubC @safe() {
     interface Timer < TMilli > as Timer0;
     interface Timer < TMilli > as Timer1;
     interface Timer < TMilli > as Timer2;
+    interface Timer < TMilli > as Timer3;
     //other interfaces, if needed
   }
 }
@@ -157,17 +158,6 @@ implementation {
       }
       break;
 
-    case DATA:
-      if (call AMSend.send(address, packet, sizeof(pubsub_message_t)) == SUCCESS) {
-        locked = TRUE;
-        dbg("radio_send", "PANC Sent a DATA message to Node %hu\n", address);
-        return TRUE;
-      } else {
-        dbgerror("radio_send", "PANC Failed to send a DATA message to Node %hu\n", address);
-        return FALSE;
-      }
-      break;
-
     default:
       dbgerror("radio_send", "Trying to send an invalid message type\n");
       return FALSE;
@@ -248,9 +238,9 @@ implementation {
       } else {
         payload -> messageType = SUBSCRIBE;
         payload -> nodeID = TOS_NODE_ID;
-        payload -> topic.temperature = 1;
-        payload -> topic.humidity = 1;
-        payload -> topic.luminosity = 1;
+        payload -> subTopic.temperature = clientInterest[TOS_NODE_ID - 2][0];
+        payload -> subTopic.humidity = clientInterest[TOS_NODE_ID - 2][1];
+        payload -> subTopic.luminosity = clientInterest[TOS_NODE_ID - 2][2];
 
         // Generate and schedule the message transmission
         if (!generate_send(1, & packet, payload -> messageType)) {
@@ -258,6 +248,47 @@ implementation {
           dbgerror("radio_send", "Failed to schedule message transmission\n");
         } else {
           dbg("radio_send", "Node %hu Scheduled a SUBSCRIBE message to PANC\n", TOS_NODE_ID);
+        }
+      }
+    }
+  }
+
+  event void Timer3.fired(){
+    /*
+     * Logic to trigger the Nodes to send PUBLISH packets
+     */
+
+    dbg("timer", "Timer3 fired.\n");
+    if (TOS_NODE_ID != 1) {
+      pubsub_message_t * payload = (pubsub_message_t * ) call Packet.getPayload( & packet, sizeof(pubsub_message_t));
+      if (payload == NULL) {
+        // Failed to obtain payload pointer
+        dbgerror("radio_pack", "Failed to obtain payload\n");
+      } else {
+        payload -> messageType = PUBLISH;
+        payload -> nodeID = TOS_NODE_ID;
+        payload -> pubTopic = publishTopic[TOS_NODE_ID - 2];
+        
+        switch (payload -> pubTopic) {
+          case TEMPERATURE:
+            payload -> payloadData = generateRandomTemperature();
+            break;
+
+          case HUMIDITY:
+            payload -> payloadData = generateRandomHumidity();
+            break;
+
+          case LUMINOSITY:
+            payload -> payloadData = generateRandomLuminosity();
+            break;
+        }
+
+        // Generate and schedule the message transmission
+        if (!generate_send(1, & packet, payload -> messageType)) {
+          // Failed to schedule the message transmission, handle the error
+          dbgerror("radio_send", "Failed to schedule message transmission\n");
+        } else {
+          dbg("radio_send", "Node %hu Scheduled a PUBLISH message to PANC with pubTopic %hu and payload %hu\n", TOS_NODE_ID, payload -> pubTopic, payload -> payloadData);
         }
       }
     }
@@ -337,6 +368,9 @@ implementation {
             dbgerror("radio_pack", "Failed to obtain payload\n");
           } else {
             uint16_t address = receivedMsg -> nodeID;
+            bool temperature = receivedMsg -> subTopic.temperature;
+            bool humidity = receivedMsg -> subTopic.humidity;
+            bool luminosity = receivedMsg -> subTopic.luminosity;
 
             payload -> messageType = SUBSCRIBE_ACK;
             payload -> nodeID = TOS_NODE_ID;
@@ -344,9 +378,25 @@ implementation {
             // check if node is connected
             if (isConnected( & networkTable, address)) {
 
-           
+            if(temperature && !isSubscribed( & networkTable, address, TEMPERATURE)) {
+              subscribe( & networkTable, address, TEMPERATURE);
+              dbg("radio_rec", "Node %hu added to the list of subscribed nodes for TEMPERATURE\n", address);
+              
+            }
             
+            if(humidity && !isSubscribed( & networkTable, address, HUMIDITY)) {
+              subscribe( & networkTable, address, HUMIDITY);
+              dbg("radio_rec", "Node %hu added to the list of subscribed nodes for HUMIDITY\n", address);
+              
+            }
 
+            if(luminosity && !isSubscribed( & networkTable, address, LUMINOSITY)) {
+              subscribe( & networkTable, address, LUMINOSITY);
+              dbg("radio_rec", "Node %hu added to the list of subscribed nodes for LUMINOSITY\n", address);
+            
+            }
+            
+            
             // Generate and schedule the message transmission
             if (!generate_send(address, & packet, payload -> messageType)) {
               // Failed to schedule the message transmission, handle the error
@@ -370,8 +420,48 @@ implementation {
             dbg("timer", "Timer2 stopped.\n");
           }
 
+          call Timer3.startOneShot(RETRANSMISSION_TIMEOUT);
+
         }
         break;
+
+      case PUBLISH:
+      dbg("radio_rec", "Received a PUBLISH message from node %hu\n", receivedMsg -> nodeID);
+      if(TOS_NODE_ID == 1){          
+        // If the node is the PAN Coordinator, forward PUBLISH to all nodes
+          pubsub_message_t * payload = (pubsub_message_t * ) call Packet.getPayload( & packet, sizeof(pubsub_message_t));
+          if (payload == NULL) {
+            // Failed to obtain payload pointer
+            dbgerror("radio_pack", "Failed to obtain payload\n");
+          } else{
+
+            uint8_t address = receivedMsg -> nodeID;
+            uint8_t pubTopic = receivedMsg -> pubTopic;
+
+            uint8_t i;
+            for( i = 0; i < MAX_CLIENTS + 2; i++){
+              if(isConnected(&networkTable, i) && isSubscribed(&networkTable, i, pubTopic)){
+                payload -> messageType = PUBLISH;
+                payload -> nodeID = address;
+                payload -> pubTopic = pubTopic;
+                payload -> subTopic = receivedMsg -> subTopic;
+                payload -> payloadData = receivedMsg -> payloadData;
+
+                if (!generate_send(i, & packet, payload -> messageType)) {
+                  // Failed to schedule the message transmission, handle the error
+                  dbgerror("radio_send", "Failed to schedule message transmission\n");
+                } else {
+                  dbg("radio_send", "Node %hu Scheduled a PUBLISH message to node %hu\n", TOS_NODE_ID, i);
+                }
+              }
+            }
+
+          }
+
+      } else{
+        // Node received a PUBLISH message from the PAN Coordinator
+        dbg("radio_rec", "Received a PUBLISH message from node %hu\n", receivedMsg -> nodeID);
+      }
 
       default:
         dbgerror("radio_rec", "Received an invalid message type\n");

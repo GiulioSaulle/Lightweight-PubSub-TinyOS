@@ -17,12 +17,19 @@
 // Maximum size of the message queue
 #define MAX_QUEUE_SIZE 100
 
+
 // Topic types
 typedef enum {
   TEMPERATURE,
-  LUMINOSITY,
-  HUMIDITY
+  HUMIDITY,
+  LUMINOSITY
 } Topic;
+
+// Each column represents a topic (Temperature, Humidity, Luminosity) and each row represents a client
+bool clientInterest[MAX_CLIENTS][3] = {{ 0, 1, 0}, { 1, 1, 0}, { 1, 1, 1}, { 0, 0, 1}, { 1, 0, 0}, { 0, 1, 1}, { 1, 0, 1}, { 1, 0, 0}};
+
+// Topic on which each client is publishing
+uint8_t publishTopic [MAX_CLIENTS] = {TEMPERATURE, HUMIDITY, LUMINOSITY, LUMINOSITY, TEMPERATURE, HUMIDITY, LUMINOSITY, TEMPERATURE};
 
 // Message types
 enum {
@@ -30,8 +37,7 @@ enum {
   CONNECT_ACK,
   SUBSCRIBE,
   SUBSCRIBE_ACK,
-  PUBLISH,
-  DATA
+  PUBLISH
 };
 
 typedef nx_struct pubsub_message {
@@ -41,8 +47,9 @@ typedef nx_struct pubsub_message {
     nx_uint8_t temperature : 1; // Bit field representing Temperature selection
     nx_uint8_t humidity : 1; // Bit field representing Humidity selection
     nx_uint8_t luminosity : 1; // Bit field representing Luminosity selection
-  } topic;
-  nx_uint16_t payload; // Payload data (e.g., sensor reading)
+  } subTopic; // Topic on which the client is subscribing
+  nx_uint8_t pubTopic; // Topic on which the client is publishing
+  nx_uint16_t payloadData; // Payload data (e.g., sensor reading)
 }
 pubsub_message_t;
 
