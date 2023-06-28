@@ -15,6 +15,8 @@ t = Tossim([]);
 topofile="topology.txt";
 modelfile="meyer-heavy.txt";
 
+simulation_duration = 180  # Duration in seconds
+simulation_end_time = simulation_duration * t.ticksPerSecond()
 
 print "Initializing mac....";
 mac = t.mac();
@@ -152,7 +154,7 @@ for i in range(1, 10):
 
 print "Start simulation with TOSSIM! \n\n\n";
 
-for i in range(0,2200):
+while t.time() < simulation_end_time:
 	t.runNextEvent()
 	
 print "\n\n\nSimulation finished!";

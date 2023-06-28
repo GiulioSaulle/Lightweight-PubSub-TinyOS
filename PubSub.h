@@ -10,6 +10,9 @@
 // Timeout for CONNECT and SUBSCRIBE message
 #define RETRANSMISSION_TIMEOUT 5000
 
+// Publish interval for each client
+#define PUBLISH_INTERVAL 60000
+
 // Minimum and maximum delay for the random delay
 #define MIN_DELAY 100
 #define MAX_DELAY 800

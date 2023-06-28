@@ -70,7 +70,7 @@ implementation {
     if (call Timer0.isRunning()) {
 
       // Timer is already running, the message will be sent later
-      dbg("radio_send", "Timer is already running, the message will be sent later\n");
+      dbg("timer", "Timer0 is already running, the message will be sent later\n");
 
     } else {
 
@@ -305,12 +305,11 @@ implementation {
       return bufPtr;
     } else {
       pubsub_message_t * receivedMsg = (pubsub_message_t * ) payload;
-      dbg("radio_rec", "Received packet at time %s\n", sim_time_string());
 
       switch (receivedMsg -> messageType) {
 
       case CONNECT:
-        dbg("radio_rec", "Received a CONNECT message from node %hu\n", receivedMsg -> nodeID);
+        dbg("radio_rec", "Received a CONNECT message from node %hu at time %s\n", receivedMsg -> nodeID, sim_time_string());
         if (TOS_NODE_ID == 1) {
           // If the node is the PAN Coordinator, send a CONNECT_ACK message
           pubsub_message_t * payload = (pubsub_message_t * ) call Packet.getPayload( & packet, sizeof(pubsub_message_t));
@@ -345,7 +344,7 @@ implementation {
         break;
 
       case CONNECT_ACK:
-        dbg("radio_rec", "Received a CONNECT_ACK message from node %hu\n", receivedMsg -> nodeID);
+        dbg("radio_rec", "Received a CONNECT_ACK message from node %hu at time %s\n", receivedMsg -> nodeID, sim_time_string());
         if (TOS_NODE_ID != 1 && call Timer1.isRunning()) {
 
           if (call Timer1.isRunning()) {
@@ -359,7 +358,7 @@ implementation {
         break;
 
       case SUBSCRIBE:
-        dbg("radio_rec", "Received a SUBSCRIBE message from node %hu\n", receivedMsg -> nodeID);
+        dbg("radio_rec", "Received a SUBSCRIBE message from node %hu at time %s\n", receivedMsg -> nodeID, sim_time_string());
         if (TOS_NODE_ID == 1) {
           // If the node is the PAN Coordinator, send a SUBSCRIBE_ACK message
           pubsub_message_t * payload = (pubsub_message_t * ) call Packet.getPayload( & packet, sizeof(pubsub_message_t));
@@ -412,7 +411,7 @@ implementation {
         break;
 
       case SUBSCRIBE_ACK:
-        dbg("radio_rec", "Received a SUBSCRIBE_ACK message from node %hu\n", receivedMsg -> nodeID);
+        dbg("radio_rec", "Received a SUBSCRIBE_ACK message from node %hu at time %s\n", receivedMsg -> nodeID, sim_time_string());
         if (TOS_NODE_ID != 1) {
           
           if (call Timer2.isRunning()) {
@@ -420,13 +419,12 @@ implementation {
             dbg("timer", "Timer2 stopped.\n");
           }
 
-          call Timer3.startOneShot(RETRANSMISSION_TIMEOUT);
+          call Timer3.startPeriodic(PUBLISH_INTERVAL);
 
         }
         break;
 
       case PUBLISH:
-      dbg("radio_rec", "Received a PUBLISH message from node %hu\n", receivedMsg -> nodeID);
       if(TOS_NODE_ID == 1){          
         // If the node is the PAN Coordinator, forward PUBLISH to all nodes
           pubsub_message_t * payload = (pubsub_message_t * ) call Packet.getPayload( & packet, sizeof(pubsub_message_t));
@@ -437,10 +435,12 @@ implementation {
 
             uint8_t address = receivedMsg -> nodeID;
             uint8_t pubTopic = receivedMsg -> pubTopic;
-
             uint8_t i;
+
+            dbg("radio_rec", "Panc received a PUBLISH message from node %hu at time %s\n", receivedMsg -> nodeID, sim_time_string());
+
             for( i = 0; i < MAX_CLIENTS + 2; i++){
-              if(isConnected(&networkTable, i) && isSubscribed(&networkTable, i, pubTopic)){
+              if(isConnected(&networkTable, i) && isSubscribed(&networkTable, i, pubTopic) && i != address){
                 payload -> messageType = PUBLISH;
                 payload -> nodeID = address;
                 payload -> pubTopic = pubTopic;
@@ -457,11 +457,12 @@ implementation {
             }
 
           }
-
+      
       } else{
         // Node received a PUBLISH message from the PAN Coordinator
-        dbg("radio_rec", "Received a PUBLISH message from node %hu\n", receivedMsg -> nodeID);
+        dbg("radio_rec", "Received a PUBLISH message from node %hu at time %s\n", receivedMsg -> nodeID, sim_time_string());
       }
+        break;
 
       default:
         dbgerror("radio_rec", "Received an invalid message type\n");
