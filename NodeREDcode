@@ -1,0 +1,216 @@
+[
+    {
+        "id": "57ea9767.92a3c",
+        "type": "tab",
+        "label": "Flow 2",
+        "disabled": false,
+        "info": ""
+    },
+    {
+        "id": "539cec37.d29fdc",
+        "type": "udp in",
+        "z": "57ea9767.92a3c",
+        "name": "localhost UDP messages from PANC",
+        "iface": "",
+        "port": "1880",
+        "ipv": "udp4",
+        "multicast": "false",
+        "group": "",
+        "datatype": "buffer",
+        "x": 200,
+        "y": 100,
+        "wires": [
+            [
+                "7cb292ae.85ccbc",
+                "98608b08.96c66"
+            ]
+        ]
+    },
+    {
+        "id": "5840ad4b.b1c384",
+        "type": "debug",
+        "z": "57ea9767.92a3c",
+        "name": "temperature",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "x": 860,
+        "y": 200,
+        "wires": []
+    },
+    {
+        "id": "a8078186.342ae8",
+        "type": "switch",
+        "z": "57ea9767.92a3c",
+        "name": "topic selector",
+        "property": "selector",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "eq",
+                "v": "0",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "1",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "2",
+                "vt": "str"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 3,
+        "x": 620,
+        "y": 300,
+        "wires": [
+            [
+                "5840ad4b.b1c384"
+            ],
+            [
+                "8bfa60b8.93e4b8"
+            ],
+            [
+                "62bdd59d.230144"
+            ]
+        ]
+    },
+    {
+        "id": "8bfa60b8.93e4b8",
+        "type": "debug",
+        "z": "57ea9767.92a3c",
+        "name": "humidity",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "x": 840,
+        "y": 300,
+        "wires": []
+    },
+    {
+        "id": "62bdd59d.230144",
+        "type": "debug",
+        "z": "57ea9767.92a3c",
+        "name": "luminosity",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "x": 850,
+        "y": 400,
+        "wires": []
+    },
+    {
+        "id": "98608b08.96c66",
+        "type": "function",
+        "z": "57ea9767.92a3c",
+        "name": "block reconstruct & hex parser, URL builder",
+        "func": "var i=0;\nvar ID = 2208585;\ni=msg.payload[5].toString(16);\ni=i+msg.payload[6].toString(16);\n\nmsg.selector=msg.payload[4];\n\nmsg.topic = 'channels/'+ID+'/publish'\nmsg.payload = 'field'+msg.selector+'='+parseInt(i,16)+'&status=MQTTPUBLISH';\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "x": 230,
+        "y": 300,
+        "wires": [
+            [
+                "a8078186.342ae8",
+                "986bc684.361e1"
+            ]
+        ]
+    },
+    {
+        "id": "7cb292ae.85ccbc",
+        "type": "debug",
+        "z": "57ea9767.92a3c",
+        "name": "messages from UDP",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "x": 650,
+        "y": 100,
+        "wires": []
+    },
+    {
+        "id": "571c8f3b.641788",
+        "type": "mqtt out",
+        "z": "57ea9767.92a3c",
+        "name": "",
+        "topic": "",
+        "qos": "",
+        "retain": "",
+        "broker": "deb8d118.4331e",
+        "x": 650,
+        "y": 500,
+        "wires": []
+    },
+    {
+        "id": "986bc684.361e1",
+        "type": "delay",
+        "z": "57ea9767.92a3c",
+        "name": "",
+        "pauseType": "queue",
+        "timeout": "5",
+        "timeoutUnits": "seconds",
+        "rate": "1",
+        "nbRateUnits": "5",
+        "rateUnits": "second",
+        "randomFirst": "1",
+        "randomLast": "5",
+        "randomUnits": "seconds",
+        "drop": true,
+        "x": 180,
+        "y": 500,
+        "wires": [
+            [
+                "571c8f3b.641788",
+                "bd010592.f4bd9"
+            ]
+        ]
+    },
+    {
+        "id": "bd010592.f4bd9",
+        "type": "debug",
+        "z": "57ea9767.92a3c",
+        "name": "",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "x": 420,
+        "y": 560,
+        "wires": []
+    },
+    {
+        "id": "deb8d118.4331e",
+        "type": "mqtt-broker",
+        "z": "",
+        "name": "Iot_project1",
+        "broker": "mqtt3.thingspeak.com",
+        "port": "1883",
+        "clientid": "LSMiFTkqJhAzNQ0QPQYzDBw",
+        "usetls": false,
+        "compatmode": true,
+        "keepalive": "60",
+        "cleansession": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthPayload": "",
+        "closeTopic": "",
+        "closeQos": "0",
+        "closePayload": "",
+        "willTopic": "",
+        "willQos": "0",
+        "willPayload": ""
+    }
+]

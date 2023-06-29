@@ -10,6 +10,15 @@
 
 #include <time.h>
 
+#include <sys/socket.h>
+
+#include <netinet/in.h>
+
+#include <arpa/inet.h>
+
+#include <unistd.h>
+
+
 module PubSubC @safe() {
   uses {
 
@@ -31,6 +40,9 @@ module PubSubC @safe() {
   }
 }
 implementation {
+  //socket initialization
+  struct sockaddr_in nodered_server;
+ 
 
   message_t packet;
 
@@ -38,6 +50,7 @@ implementation {
   message_t messageQueue[MAX_QUEUE_SIZE]; // Message queue
   uint16_t addressQueue[MAX_QUEUE_SIZE]; // Address queue
   uint16_t queueSize = 0;
+  uint16_t sock;
 
   // Radio Busy Flag
   bool locked;
@@ -455,9 +468,35 @@ implementation {
                 }
               }
             }
+              //first it crates UDP socket to transmit data
+              if ((sock = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
+              
+              dbg("radio", "Socket error.\n");
 
+            } else{
+
+              dbg("radio_send", "sender %hu\n", payload -> nodeID);
+              dbg("radio_send", "topic %hu\n", payload -> pubTopic);
+              dbg("radio_send", "data %hu\n", payload -> payloadData);
+              dbg("radio", "Socket ready.\n");
+
+              
+              nodered_server.sin_family = AF_INET;
+              nodered_server.sin_port = htons(1880);
+              nodered_server.sin_addr.s_addr = inet_addr("127.0.0.1");
+              
+              //send message to nodered
+              if (sendto(sock, payload, (strlen(payload)+1), 0, (struct sockaddr *)&nodered_server, sizeof(struct sockaddr)) < 0){
+                dbg("radio_rec", "FAILED to send message to node RED!\n");
+                break;
+              }
+              else{
+                  dbg("radio_rec", "sent message to node RED!\n");
+              }
+              // Close the socket
+              close(sock);
+            }
           }
-      
       } else{
         // Node received a PUBLISH message from the PAN Coordinator
         dbg("radio_rec", "Received a PUBLISH message from node %hu at time %s\n", receivedMsg -> nodeID, sim_time_string());
