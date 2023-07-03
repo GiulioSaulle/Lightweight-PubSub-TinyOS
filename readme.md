@@ -22,7 +22,7 @@ To get started with the project, follow these steps:
 
 1. Clone the repository:
 
-2. Set up the required dependencies and development environment.
+2. Set up the required dependencies and development environment (TOSSIM).
 
 3. Configure the PAN coordinator and client nodes according to your network topology.
 
@@ -30,7 +30,21 @@ To get started with the project, follow these steps:
 
 5. Run the TOSSIM simulation environment and observe the behavior of the protocol.
 
-6. Integrate the PAN coordinator with Node-RED and configure the periodic transmission to Thingspeak.
+6. Open Node-RED and import the flows.json file.
+   
+7. Double-click the UDP to ThingSpeak node and configure the ThingSpeak API Key and Channel ID fields with your ThingSpeak account information.
+
+8. Deploy the flow.
+
+## Node Red
+
+The Node-RED flow receives UDP messages on port 3030, parses the message, formats it as an MQTT payload, and publishes it to ThingSpeak. The parsed values are then formatted as an MQTT payload with the format "fieldX=value&status=MQTTPUBLISH", where X is the pubtopic value incremented by 1. The payload is then rate-limited to 1 publish every 15 seconds to comply with ThingSpeak's free tier limitations. The MQTT payload is then published to the ThingSpeak broker using the MQTT protocol.
+
+## ThingSpeak
+
+The public channel shows one chart for each topic (`TEMPERATURE`, `HUMIDITY`, and `LUMINOSITY`).
+
+[ThingSpeak Public View](https://thingspeak.com/channels/2177976)
 
 ## License
 
