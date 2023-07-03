@@ -36,6 +36,7 @@ module PubSubC @safe() {
     interface Timer < TMilli > as Timer1;
     interface Timer < TMilli > as Timer2;
     interface Timer < TMilli > as Timer3;
+    interface Timer < TMilli > as Timer4;
     //other interfaces, if needed
   }
 }
@@ -50,7 +51,18 @@ implementation {
   message_t messageQueue[MAX_QUEUE_SIZE]; // Message queue
   uint16_t addressQueue[MAX_QUEUE_SIZE]; // Address queue
   uint16_t queueSize = 0;
+
   uint16_t sock;
+
+  typedef struct {
+    uint8_t pubTopic;
+    uint8_t payloadData;
+    uint8_t nodeId;
+    char simTime[20];
+  } buffer_entry_t;
+
+  buffer_entry_t transmitBuffer[MAX_QUEUE_SIZE];
+  uint8_t bufferIndex = 0;
 
   // Radio Busy Flag
   bool locked;
@@ -196,6 +208,7 @@ implementation {
       } else {
         // Initialize the CommunicationNetwork
         initializeCommunicationNetwork( & networkTable);
+        call Timer4.startPeriodic(TRANSMIT_INTERVAL);
       }
     } else {
       // Radio startup failed
@@ -305,6 +318,49 @@ implementation {
         }
       }
     }
+  }
+
+  event void Timer4.fired(){
+
+    /*
+     * Logic to send transmitBuffer to NodeRed via UDP
+     */
+
+      uint8_t i; // loop counter
+      char str[100]; // string to send
+
+      // loop through the buffer and send the data
+      for ( i = 0; i < bufferIndex; i++) {
+
+            //first it crates UDP socket to transmit data
+            if ((sock = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
+              
+            dbg("node_red", "Socket error.\n");
+
+          } else{
+
+            // Convert the data to string            
+            snprintf(str, 100, "%d %d %d %s", transmitBuffer[i].pubTopic, transmitBuffer[i].payloadData, transmitBuffer[i].nodeId, transmitBuffer[i].simTime);
+              
+            nodered_server.sin_family = AF_INET;
+            nodered_server.sin_port = htons(3030);
+            nodered_server.sin_addr.s_addr = inet_addr("127.0.0.1");
+              
+            //send message to nodered
+            if (sendto(sock, str, strlen(str), 0, (struct sockaddr *)&nodered_server, sizeof(struct sockaddr)) < 0) {
+            dbg("node_red", "FAILED to send message to node RED!\n");
+            break;
+            } else {
+            dbg("node_red", "Sent packet %hu to NodeRed: %s\n", i, str);
+            }
+            // Close the socket
+            close(sock);
+           }
+        
+      }
+      // reset the buffer index
+      bufferIndex = 0;
+
   }
 
   event message_t * Receive.receive(message_t * bufPtr, void * payload, uint8_t len) {
@@ -448,9 +504,21 @@ implementation {
 
             uint8_t address = receivedMsg -> nodeID;
             uint8_t pubTopic = receivedMsg -> pubTopic;
+            uint8_t payloadData = receivedMsg -> payloadData;
             uint8_t i;
 
             dbg("radio_rec", "Panc received a PUBLISH message from node %hu at time %s\n", receivedMsg -> nodeID, sim_time_string());
+
+            // add message to buffer to be transmitted to Node-RED when Timer4 expires
+            if(bufferIndex < MAX_QUEUE_SIZE){
+              transmitBuffer[bufferIndex].pubTopic = pubTopic;
+              transmitBuffer[bufferIndex].payloadData = payloadData;
+              transmitBuffer[bufferIndex].nodeId = address;
+              sprintf(transmitBuffer[bufferIndex].simTime, "%s", sim_time_string());
+              bufferIndex++;
+            } else {
+              dbgerror("node_red", "Buffer is full\n");
+            }
 
             for( i = 0; i < MAX_CLIENTS + 2; i++){
               if(isConnected(&networkTable, i) && isSubscribed(&networkTable, i, pubTopic) && i != address){
@@ -467,34 +535,6 @@ implementation {
                   dbg("radio_send", "Node %hu Scheduled a PUBLISH message to node %hu\n", TOS_NODE_ID, i);
                 }
               }
-            }
-              //first it crates UDP socket to transmit data
-              if ((sock = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
-              
-              dbg("radio", "Socket error.\n");
-
-            } else{
-
-              dbg("radio_send", "sender %hu\n", payload -> nodeID);
-              dbg("radio_send", "topic %hu\n", payload -> pubTopic);
-              dbg("radio_send", "data %hu\n", payload -> payloadData);
-              dbg("radio", "Socket ready.\n");
-
-              
-              nodered_server.sin_family = AF_INET;
-              nodered_server.sin_port = htons(1880);
-              nodered_server.sin_addr.s_addr = inet_addr("127.0.0.1");
-              
-              //send message to nodered
-              if (sendto(sock, payload, (strlen(payload)+1), 0, (struct sockaddr *)&nodered_server, sizeof(struct sockaddr)) < 0){
-                dbg("radio_rec", "FAILED to send message to node RED!\n");
-                break;
-              }
-              else{
-                  dbg("radio_rec", "sent message to node RED!\n");
-              }
-              // Close the socket
-              close(sock);
             }
           }
       } else{

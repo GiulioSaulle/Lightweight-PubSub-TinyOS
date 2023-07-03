@@ -1,0 +1,143 @@
+[
+    {
+        "id": "56ca6cf2.25a064",
+        "type": "tab",
+        "label": "Flow 1",
+        "disabled": false,
+        "info": ""
+    },
+    {
+        "id": "f0a6b79e.becad8",
+        "type": "udp in",
+        "z": "56ca6cf2.25a064",
+        "name": "UDP from PANC",
+        "iface": "",
+        "port": "3030",
+        "ipv": "udp4",
+        "multicast": "false",
+        "group": "",
+        "datatype": "utf8",
+        "x": 210,
+        "y": 220,
+        "wires": [
+            [
+                "e39fff97.930ac8"
+            ]
+        ]
+    },
+    {
+        "id": "b9a8ce11.0df718",
+        "type": "debug",
+        "z": "56ca6cf2.25a064",
+        "name": "Formatted Payload",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "x": 1140,
+        "y": 160,
+        "wires": []
+    },
+    {
+        "id": "e39fff97.930ac8",
+        "type": "function",
+        "z": "56ca6cf2.25a064",
+        "name": "Parse message",
+        "func": "var udpString = msg.payload.toString(); // Convert UDP payload to string\nvar udpData = udpString.split(' '); // Split the string by spaces\n\n// Extract individual values\nvar pubtopic = parseInt(udpData[0]);\nvar payloadData = parseInt(udpData[1]);\nvar nodeid = parseInt(udpData[2]);\nvar simtime = udpData[3];\n\n// Create an object with the parsed values\nvar parsedData = {\n  pubtopic: pubtopic,\n  payloadData: payloadData,\n  nodeid: nodeid,\n  simtime: simtime\n};\n\n// Set the parsed data as the new payload\nmsg.payload = parsedData;\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "x": 430,
+        "y": 220,
+        "wires": [
+            [
+                "69924301.a9d25c"
+            ]
+        ]
+    },
+    {
+        "id": "b785f7e4.cce43",
+        "type": "mqtt out",
+        "z": "56ca6cf2.25a064",
+        "name": "Send to ThingSpeak",
+        "topic": "channels/2177976/publish",
+        "qos": "",
+        "retain": "",
+        "broker": "d9aa3407.2c544",
+        "x": 1150,
+        "y": 280,
+        "wires": []
+    },
+    {
+        "id": "69924301.a9d25c",
+        "type": "function",
+        "z": "56ca6cf2.25a064",
+        "name": "Format MQTT Payload",
+        "func": "var pubtopic = msg.payload.pubtopic+1;\nvar payloadData = msg.payload.payloadData\n\nmsg.payload = 'field'+pubtopic+'='+payloadData+'&status=MQTTPUBLISH';\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "x": 680,
+        "y": 220,
+        "wires": [
+            [
+                "86614b4.d2a4838"
+            ]
+        ]
+    },
+    {
+        "id": "86614b4.d2a4838",
+        "type": "delay",
+        "z": "56ca6cf2.25a064",
+        "name": "Rate Limit",
+        "pauseType": "rate",
+        "timeout": "5",
+        "timeoutUnits": "seconds",
+        "rate": "1",
+        "nbRateUnits": "15",
+        "rateUnits": "second",
+        "randomFirst": "1",
+        "randomLast": "5",
+        "randomUnits": "seconds",
+        "drop": false,
+        "x": 910,
+        "y": 220,
+        "wires": [
+            [
+                "b9a8ce11.0df718",
+                "b785f7e4.cce43"
+            ]
+        ]
+    },
+    {
+        "id": "2b1e973d.d93b9",
+        "type": "comment",
+        "z": "56ca6cf2.25a064",
+        "name": "Free version of thingspeak allows 1 publish every 15s",
+        "info": "",
+        "x": 620,
+        "y": 340,
+        "wires": []
+    },
+    {
+        "id": "d9aa3407.2c544",
+        "type": "mqtt-broker",
+        "z": "",
+        "name": "ThingSpeakProject",
+        "broker": "mqtt3.thingspeak.com",
+        "port": "1883",
+        "clientid": "Gzg0MgovEB0IExgcBjsfCR8",
+        "usetls": false,
+        "compatmode": true,
+        "keepalive": "60",
+        "cleansession": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthPayload": "",
+        "closeTopic": "",
+        "closeQos": "0",
+        "closePayload": "",
+        "willTopic": "",
+        "willQos": "0",
+        "willPayload": ""
+    }
+]

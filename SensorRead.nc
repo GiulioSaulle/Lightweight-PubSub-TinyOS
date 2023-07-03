@@ -2,7 +2,7 @@
 
 // Function to generate a random temperature reading in Celsius
 int16_t generateRandomTemperature() {
-  int16_t minTemperature = -10; // Minimum temperature (-10°C)
+  int16_t minTemperature = 0; // Minimum temperature (0°C)
   int16_t maxTemperature = 40; // Maximum temperature (40°C)
 
   // Generate a random temperature within the specified range
