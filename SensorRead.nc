@@ -1,12 +1,12 @@
 #include <stdlib.h>
 
 // Function to generate a random temperature reading in Celsius
-int16_t generateRandomTemperature() {
-  int16_t minTemperature = 0; // Minimum temperature (0°C)
-  int16_t maxTemperature = 40; // Maximum temperature (40°C)
+uint16_t generateRandomTemperature() {
+  uint16_t minTemperature = 0; // Minimum temperature (0°C)
+  uint16_t maxTemperature = 40; // Maximum temperature (40°C)
 
   // Generate a random temperature within the specified range
-  int16_t temperature = minTemperature + rand() % (maxTemperature - minTemperature + 1);
+  uint16_t temperature = minTemperature + rand() % (maxTemperature - minTemperature + 1);
 
   return temperature;
 }
